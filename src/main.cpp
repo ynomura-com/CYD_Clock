@@ -21,6 +21,7 @@ class LGFX : public lgfx::LGFX_Device {
   lgfx::Panel_ILI9341 _panel;
   lgfx::Bus_SPI       _bus;
   lgfx::Light_PWM     _light;
+  lgfx::Touch_XPT2046 _touch;
 
 public:
   LGFX() {
@@ -68,6 +69,25 @@ public:
       _light.config(cfg);
       _panel.setLight(&_light);
     }
+    {
+      // タッチパネル (XPT2046) は表示とは別の SPI に接続されている
+      auto cfg = _touch.config();
+      cfg.x_min           = 300;
+      cfg.x_max           = 3900;
+      cfg.y_min           = 200;
+      cfg.y_max           = 3700;
+      cfg.pin_int         = -1;
+      cfg.bus_shared      = false;
+      cfg.offset_rotation = 0;
+      cfg.spi_host        = SPI3_HOST;
+      cfg.freq            = 1000000;
+      cfg.pin_sclk        = 25;
+      cfg.pin_mosi        = 32;
+      cfg.pin_miso        = 39;
+      cfg.pin_cs          = 33;
+      _touch.config(cfg);
+      _panel.setTouch(&_touch);
+    }
     setPanel(&_panel);
   }
 };
@@ -110,6 +130,26 @@ static const int W_COL_W   = 64;    // 320 / 5
 static const char *WEEKDAY_JA[] = {"日", "月", "火", "水", "木", "金", "土"};
 
 static int timeW = 0, timeH = 0;
+
+// ---------- バックライト（タッチで 通常 → 暗い → 消灯 を順に切替）----------
+static const uint8_t BRIGHTNESS_LEVELS[] = {200, 30, 0};  // 通常 / 暗い / 消灯
+static const int BRIGHTNESS_COUNT = sizeof(BRIGHTNESS_LEVELS) / sizeof(BRIGHTNESS_LEVELS[0]);
+static int brightnessIdx = 0;
+
+static void handleTouch() {
+  static bool wasTouched = false;
+  static uint32_t lastMs = 0;
+
+  int32_t x, y;
+  bool touched = lcd.getTouch(&x, &y) > 0;
+
+  if (touched && !wasTouched && millis() - lastMs > 300) {
+    brightnessIdx = (brightnessIdx + 1) % BRIGHTNESS_COUNT;
+    lcd.setBrightness(BRIGHTNESS_LEVELS[brightnessIdx]);
+    lastMs = millis();
+  }
+  wasTouched = touched;
+}
 
 static bool timeIsValid(const tm &t) { return (t.tm_year + 1900) >= 2024; }
 
@@ -422,8 +462,8 @@ void setup() {
   Serial.begin(115200);
 
   lcd.init();
-  lcd.setRotation(3);  // 横向き。上下逆なら 3 に変更
-  lcd.setBrightness(100);  // 画面の明るさ　0～255
+  lcd.setRotation(3);  // 横向き。上下逆なら 1 に変更
+  lcd.setBrightness(BRIGHTNESS_LEVELS[brightnessIdx]);
   initColors();
   initTimeLayout();
 
@@ -454,6 +494,8 @@ void loop() {
     lastCheck = millis();
     if (WiFi.status() != WL_CONNECTED) WiFi.reconnect();
   }
+
+  handleTouch();
 
   time_t now = time(nullptr);
   tm t;
