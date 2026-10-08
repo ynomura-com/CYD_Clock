@@ -1,8 +1,8 @@
 #pragma once
 
 // ===== Wi-Fi 設定（2.4GHz のみ対応）=====
-#define WIFI_SSID     "your_ssid"
-#define WIFI_PASSWORD "your_password"
+#define WIFI_SSID     "YOUR_SSID"
+#define WIFI_PASSWORD "YOUR_PASSWORD"
 
 // ===== 時刻設定 =====
 #define TZ_JST   "JST-9"
